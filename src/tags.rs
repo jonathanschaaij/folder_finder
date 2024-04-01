@@ -1,7 +1,26 @@
 use crate::database;
 use crate::types;
 
-pub fn command(args: &clap::ArgMatches) {
+use clap::{arg, Command};
+
+pub fn command() -> Command {
+    Command::new("tag")
+        .about("Manage tags")
+        .arg_required_else_help(true)
+        .subcommand(Command::new("list").about("List all tags"))
+        .subcommand(
+            Command::new("add")
+                .about("Add a new tag")
+                .arg(arg!(<TAG>).required(true).num_args(1..)),
+        )
+        .subcommand(
+            Command::new("del")
+                .about("Delete a tag")
+                .arg(arg!(<TAG>).required(true).num_args(1..)),
+        )
+}
+
+pub fn run(args: &clap::ArgMatches) {
     match args.subcommand() {
         Some(("list", _)) => list(),
         Some(("add", args)) => add(args
@@ -56,4 +75,50 @@ fn del(words: Vec<&str>) {
             }
         }
     }
+}
+
+fn query_new() -> Vec<types::Tag> {
+    let mut tags = Vec::new();
+    loop {
+        let tag = dialoguer::Input::<String>::new()
+            .with_prompt("Enter a tag")
+            .allow_empty(true)
+            .interact()
+            .unwrap();
+        if tag.is_empty() {
+            break tags;
+        } else {
+            tags.push(types::Tag { name: tag });
+        }
+    }
+}
+
+pub fn select_tags(allow_new: bool) -> Vec<types::Tag> {
+    //Option<types::Tag> {
+    let tags = database::list_tags();
+    let mut tag_names = tags.iter().map(|tag| tag.name.clone()).collect::<Vec<_>>();
+    let mut index_offset = 0;
+    if allow_new {
+        tag_names.insert(0, "Add more tags".to_string());
+        index_offset = 1;
+    }
+
+    let selected = dialoguer::MultiSelect::new()
+        .items(&tag_names)
+        .interact()
+        .unwrap();
+
+    let query = selected.contains(&0);
+    let mut selected_tags = selected
+        .iter()
+        .filter(|&&i| i != 0)
+        .map(|&i| tags[i - index_offset].clone())
+        .collect::<Vec<_>>();
+
+    if query {
+        query_new()
+            .iter()
+            .for_each(|tag| selected_tags.push(tag.clone()));
+    }
+    selected_tags
 }

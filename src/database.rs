@@ -1,7 +1,7 @@
 use rusqlite::named_params;
 
 use crate::types::{AlreadyExistsError, Collection, DataType, NotFoundError, Project, Tag};
-use std::{collections::HashSet, path::PathBuf};
+use std::collections::HashSet;
 
 fn get_db() -> rusqlite::Connection {
     let home = dirs::home_dir().unwrap();
@@ -82,6 +82,21 @@ pub fn init(reset: bool) {
         )
         .expect("Failed to create tables");
     }
+}
+
+pub fn add_project_collection(project: &DataType, collection: &DataType) -> () {
+    let conn = get_db();
+    match (project, collection) {
+        (DataType::Project(_), DataType::Collection(_)) => {}
+        _ => panic!("Expected project and collection"),
+    }
+    let project_id = get_id(&project);
+    let collection_id = get_id(&collection);
+    let stmt = format!(
+        "UPDATE projects SET collection_id = {} WHERE id = {}",
+        collection_id, project_id
+    );
+    conn.execute(stmt.as_str(), []).unwrap();
 }
 
 pub fn get_id(data: &DataType) -> i64 {
@@ -168,7 +183,7 @@ pub fn list_tags() -> Vec<Tag> {
 pub fn add_tag(data: &DataType, tag: Tag, force: bool) -> Result<(), NotFoundError> {
     let conn = get_db();
     match data {
-        DataType::Tag(p) => {
+        DataType::Tag(_) => {
             panic!("Cannot add tag to tag")
         }
         _ => {}
@@ -214,7 +229,7 @@ fn get_project_tags(project_id: i64) -> HashSet<Tag> {
         )
         .unwrap();
     let tag_names = stmt.query_map([project_id], |row| row.get(0)).unwrap();
-    let mut tags: HashSet<Tag> = tag_names.map(|t| Tag { name: t.unwrap() }).collect();
+    let tags: HashSet<Tag> = tag_names.map(|t| Tag { name: t.unwrap() }).collect();
 
     let part_of_collection: bool = conn
         .query_row(
@@ -257,28 +272,28 @@ fn get_collection_tags(collection_id: i64) -> HashSet<Tag> {
     tag_names.map(|t| Tag { name: t.unwrap() }).collect()
 }
 
-pub fn add_project(path: PathBuf) -> Result<(), AlreadyExistsError> {
-    let conn = get_db();
-    let exists: bool = conn
-        .query_row(
-            "EXISTS(SELECT 1 FROM projects WHERE path = ?)",
-            [path.to_str().unwrap()],
-            |row| row.get(0),
-        )
-        .unwrap();
-    if exists {
-        return Err(AlreadyExistsError);
-    }
-    conn.execute(
-        "INSERT INTO projects (name, path) VALUES (?, ?)",
-        [
-            path.file_name().unwrap().to_str().unwrap(),
-            path.to_str().unwrap(),
-        ],
-    )
-    .unwrap();
-    Ok(())
-}
+// pub fn add_project(path: PathBuf) -> Result<(), AlreadyExistsError> {
+//     let conn = get_db();
+//     let exists: bool = conn
+//         .query_row(
+//             "EXISTS(SELECT 1 FROM projects WHERE path = ?)",
+//             [path.to_str().unwrap()],
+//             |row| row.get(0),
+//         )
+//         .unwrap();
+//     if exists {
+//         return Err(AlreadyExistsError);
+//     }
+//     conn.execute(
+//         "INSERT INTO projects (name, path) VALUES (?, ?)",
+//         [
+//             path.file_name().unwrap().to_str().unwrap(),
+//             path.to_str().unwrap(),
+//         ],
+//     )
+//     .unwrap();
+//     Ok(())
+// }
 
 pub fn list_projects() -> Result<Vec<Project>, rusqlite::Error> {
     let conn = get_db();

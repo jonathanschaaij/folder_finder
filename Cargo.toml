@@ -8,5 +8,11 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.37"
 clap = { version = "4.5.4", features = ["cargo"] }
+dialoguer = { version = "0.11.0", features = [
+	"fuzzy-select",
+	"fuzzy-matcher",
+	"completion",
+] }
 dirs = "5.0.1"
+fzf-wrapped = "0.1.3"
 rusqlite = "0.31.0"

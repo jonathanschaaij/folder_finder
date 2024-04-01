@@ -1,19 +1,57 @@
 use std::path::PathBuf;
 
+use clap::{arg, value_parser, Command};
+
 use crate::database;
 use crate::projects;
+use crate::tags;
 use crate::types;
 
-pub fn command(args: &clap::ArgMatches) {
+pub fn command() -> Command {
+    Command::new("collection")
+        .about("Manage collections / folders with projects")
+        .arg_required_else_help(true)
+        .subcommand(Command::new("list").about("List all collections"))
+        .subcommand(
+            Command::new("add").about("Add a new collection").arg(
+                arg!(<PATH>)
+                    .required(true)
+                    .value_parser(value_parser!(PathBuf)),
+            ),
+        )
+        .subcommand(
+            Command::new("del").about("Delete a collection").arg(
+                arg!(<PATH>)
+                    .required(true)
+                    .value_parser(value_parser!(PathBuf)),
+            ),
+        )
+        .subcommand(
+            Command::new("tag")
+                .about("Tag the current collection")
+                .arg(
+                    arg!(<PATH>)
+                        .required(true)
+                        .value_parser(value_parser!(PathBuf)),
+                )
+                .arg(arg!(-f --force "Add tags if they don't exist'"))
+                .arg(arg!(<TAG>).required(false).num_args(1..)),
+        )
+}
+
+pub fn run(args: &clap::ArgMatches) {
     match args.subcommand() {
         Some(("list", _)) => list(),
-        Some(("add", args)) => add(args.get_one::<PathBuf>("PATH").unwrap().clone()),
+        Some(("add", args)) => add(args.get_one::<PathBuf>("PATH").unwrap().clone(), true),
         Some(("del", args)) => del(args.get_one::<PathBuf>("PATH").unwrap().clone()),
         Some(("tag", args)) => add_tag(
+            args.get_one::<PathBuf>("PATH").unwrap().clone(),
             args.get_flag("force"),
             args.get_many::<String>("TAG")
                 .unwrap_or_default()
-                .map(|v| v.as_str())
+                .map(|name| types::Tag {
+                    name: name.to_string(),
+                })
                 .collect(),
         ),
         _ => panic!("Should be handled by clap itself"),
@@ -36,7 +74,7 @@ fn list() {
         .for_each(|collection| println!("{}", collection));
 }
 
-fn add(path: PathBuf) {
+fn add(path: PathBuf, ask_tags: bool) {
     let collection = path_to_collection(&path);
     let res = database::add(&collection);
     match res {
@@ -46,9 +84,9 @@ fn add(path: PathBuf) {
             return;
         }
     }
+    add_tag(path.clone(), true, tags::select_tags(true));
 
-    // TODO:Ask for tags
-    // TODO: ASK for auto import maybe using a flag
+    // NOTE: Automatically add all subdirectories as projects
     let dir = std::fs::read_dir(&path).unwrap();
     let subdirs = dir
         .filter_map(|entry| {
@@ -62,7 +100,9 @@ fn add(path: PathBuf) {
         .collect::<Vec<_>>();
 
     subdirs.iter().for_each(|subdir| {
-        projects::add(subdir.to_path_buf());
+        let proj = projects::from_path(&subdir);
+        projects::add(subdir.to_path_buf(), false);
+        database::add_project_collection(&proj, &collection);
     });
 }
 
@@ -78,12 +118,15 @@ fn del(path: PathBuf) {
     }
 }
 
-fn add_tag(force: bool, tags: Vec<&str>) {
+fn add_tag(path: PathBuf, force: bool, tags: Vec<types::Tag>) {
+    let tags = if tags.is_empty() {
+        tags::select_tags(force)
+    } else {
+        tags
+    };
+
     tags.iter().for_each(|tag| {
-        let tag = types::Tag {
-            name: tag.to_string(),
-        };
-        let col = path_to_collection(&std::env::current_dir().unwrap());
+        let col = path_to_collection(&path);
         let res = database::add_tag(&col, tag.clone(), force);
         match res {
             Ok(_) => println!("Tag added: {}", tag.name),

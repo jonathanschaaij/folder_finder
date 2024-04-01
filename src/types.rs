@@ -31,11 +31,19 @@ pub struct Project {
 
 impl std::fmt::Display for Project {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let tagsstr = self
-            .tags
+        let mut sorted_tags = self.tags.iter().collect::<Vec<&Tag>>();
+        sorted_tags.sort_by(|a, b| a.name.cmp(&b.name));
+        let tagsstr = sorted_tags
             .iter()
             .fold(String::new(), |acc, tag| acc + &tag.name + " ");
-        write!(f, "{} | {} | {}", self.name, self.path, tagsstr.trim_end())
+
+        write!(
+            f,
+            "{:<25} | {} | {}",
+            self.name,
+            self.path,
+            tagsstr.trim_end()
+        )
     }
 }
 
@@ -44,6 +52,27 @@ pub enum DataType {
     Project(Project),
     Tag(Tag),
 }
+impl DataType {
+    pub fn collection(&self) -> Option<&Collection> {
+        match self {
+            DataType::Collection(c) => Some(c),
+            _ => None,
+        }
+    }
+    pub fn project(&self) -> Option<&Project> {
+        match self {
+            DataType::Project(p) => Some(p),
+            _ => None,
+        }
+    }
+    pub fn tag(&self) -> Option<&Tag> {
+        match self {
+            DataType::Tag(t) => Some(t),
+            _ => None,
+        }
+    }
+}
+
 pub enum EmptyDataType {
     Collection,
     Project,
