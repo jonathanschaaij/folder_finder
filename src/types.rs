@@ -39,10 +39,10 @@ impl std::fmt::Display for Project {
 
         write!(
             f,
-            "{:<25} | {} | {}",
+            "{:<25} | {}",
             self.name,
-            self.path,
-            tagsstr.trim_end()
+            tagsstr.trim_end(),
+            // self.path,
         )
     }
 }

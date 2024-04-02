@@ -1,4 +1,5 @@
 use clap::{arg, value_parser, Command};
+use fzf_wrapped::Fzf;
 
 use crate::auto_tags;
 use crate::database;
@@ -36,11 +37,13 @@ pub fn command() -> Command {
                 .arg(arg!(-f --force "Add tags if they don't exist'"))
                 .arg(arg!(<TAG>).required(true).num_args(1..)),
         )
+        .subcommand(Command::new("goto").about("Go to a project"))
 }
 
 pub fn run(args: &clap::ArgMatches) {
     match args.subcommand() {
         Some(("list", _)) => list(),
+        Some(("goto", _)) => goto(),
         Some(("add", args)) => add(args.get_one::<PathBuf>("PATH").unwrap().clone(), true),
         Some(("del", args)) => del(args.get_one::<PathBuf>("PATH").unwrap().clone()),
         Some(("tag", args)) => add_tag(
@@ -71,6 +74,19 @@ pub fn from_path(path: &PathBuf) -> types::DataType {
 fn list() {
     let projects = database::list_projects().unwrap();
     projects.iter().for_each(|proj| println!("{}", proj));
+}
+
+fn goto() {
+    let projects = database::list_projects().unwrap();
+    let strings: Vec<String> = projects.iter().map(|proj| format!("{}", proj)).collect();
+    let mut fzf = Fzf::default();
+    fzf.run().expect("Failed to start fzf");
+    fzf.add_items(&strings).expect("Failed to add items");
+    let users_selection = fzf.output().expect("Failed to get the user's output");
+    let index = strings.iter().position(|x| x == &users_selection).unwrap();
+    let proj = &projects[index];
+    std::env::set_current_dir(&proj.path).unwrap();
+    println!("{}", proj.path);
 }
 
 pub fn add(path: PathBuf, ask_tags: bool) {
